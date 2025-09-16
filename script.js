@@ -70,8 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // This now calls our own backend server
-           const response = await fetch('https://ai-chatbot-api-7muc.onrender.com/chat', {
-            const response = await fetch('https://ai-chatbot-api-7muc.onrender.com/chat', {
+            const response = await fetch('https://ai-chatbot-api-7muc.onrender.com', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ prompt: userInput }),
