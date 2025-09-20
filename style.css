@@ -1,47 +1,111 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 body {
     font-family: 'Inter', sans-serif;
+    scroll-behavior: smooth;
 }
+
+/* --- New Landing Page Styles --- */
+.bg-grid-pattern {
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+}
+
+.feature-card {
+    transition: all 0.3s ease-in-out;
+}
+
+/* --- Original Chatbot Styles --- */
+body.chat-open #main-content {
+    margin-left: 532px; 
+}
+
+#main-content {
+    transition: margin-left 0.4s ease-in-out;
+}
+
 .chat-bubble {
     max-width: 80%;
     padding: 12px 16px;
     border-radius: 16px;
     word-wrap: break-word;
 }
+
 .chat-bubble.user {
     background-color: #3b82f6;
     color: white;
     border-bottom-right-radius: 4px;
 }
+
 .chat-bubble.bot {
     background-color: #e5e7eb;
     color: #1f2937;
     border-bottom-left-radius: 4px;
 }
+
+.chat-bubble.image-bubble {
+    padding: 6px;
+    background-color: #e5e7eb;
+}
+
 .tab-button {
     transition: all 0.3s ease;
 }
+
 .tab-button.active {
     color: #3b82f6;
     border-bottom-color: #3b82f6;
 }
-.loader {
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #3b82f6;
-    border-radius: 50%;
-    width: 32px;
-    height: 32px;
-    animation: spin 1s linear infinite;
+
+.mic-listening i {
+    color: #ef4444; /* Red color when mic is active */
 }
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+
+.animated-gradient-text {
+    background-image: linear-gradient(-45deg, #46e5b3, #1da3d8, #2563eb, #f63b3b, #60a5fa, #2563eb, #1d4ed8, #4f46e5);
+    background-size: 200% auto;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gradient-flow 8s ease-in-out infinite;
 }
-.mic-listening {
-    animation: pulse 1.5s infinite;
+
+@keyframes gradient-flow {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
 }
-@keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
-    70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+
+/* This is for the animated gradient effect on the main title */
+.animated-gradient-text {
+    background-image: linear-gradient(
+        -45deg,
+        #46e5b3,
+        #1da3d8,
+        #2563eb,
+        #f63b3b,
+        #60a5fa,
+        #2563eb,
+        #1d4ed8,
+        #4f46e5
+    );
+    background-size: 200% auto;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gradient-flow 8s ease-in-out infinite;
+}
+
+@keyframes gradient-flow {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
 }

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Multi-Tool Chatbot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <script src="chat-script.js" defer></script>
+</head>
+<body class="bg-black">
+    <header class="absolute top-0 right-0 p-6 z-10">
+         <a href="/auth/logout" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-full">Logout</a>
+    </header>
+
+    <main id="main-content">
+        <div class="min-h-screen flex items-center justify-center text-white p-8">
+            <div class="max-w-3xl text-center">
+                <h1 class="text-5xl font-bold mb-4 animated-gradient-text">Welcome Back!</h1>
+                <p class="text-lg text-gray-400 mb-10">Click the message icon in the bottom right to launch your AI assistant.</p>
+                 <a href="/" class="text-blue-400 hover:underline">← Go back to Home</a>
+            </div>
+        </div>
+    </main>
+
+    <div id="chatbot-container" class="fixed top-5 left-5 w-full max-w-lg flex flex-col rounded-2xl shadow-2xl bg-white transform transition-all duration-300 ease-in-out scale-0 opacity-0" style="height: 85vh; max-height: 700px; transform-origin: top left;">
+        <header class="p-4 border-b bg-gray-50 rounded-t-2xl flex justify-between items-center flex-shrink-0">
+            <div class="text-left">
+                <h1 class="text-xl font-bold text-gray-800">AI Multi-Tool Chatbot</h1>
+                <p class="text-sm text-gray-500">Your AI Assistant</p>
+            </div>
+            <button id="close-chat-button" class="p-2 rounded-full hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500">
+                <i data-lucide="x" class="w-5 h-5 text-gray-600"></i>
+            </button>
+        </header>
+        <div class="border-b flex-shrink-0">
+            <nav class="flex justify-around -mb-px">
+                <button data-tab="chatbot" class="tab-button flex-1 py-4 px-1 text-center border-b-2 font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none active">
+                    <i data-lucide="bot" class="inline-block w-5 h-5 mr-2"></i>Chatbot
+                </button>
+                <button data-tab="vtoa" class="tab-button flex-1 py-4 px-1 text-center border-b-2 font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none">
+                    <i data-lucide="video" class="inline-block w-5 h-5 mr-2"></i>Video to Audio
+                </button>
+                <button data-tab="ttoa" class="tab-button flex-1 py-4 px-1 text-center border-b-2 font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none">
+                    <i data-lucide="volume-2" class="inline-block w-5 h-5 mr-2"></i>Text to Audio
+                </button>
+            </nav>
+        </div>
+        <main class="flex-1 overflow-hidden">
+            <div id="chatbot-tab" class="tab-content h-full flex flex-col">
+                <div id="chat-window" class="flex-1 overflow-y-auto p-4 space-y-4">
+                    <div class="flex justify-start">
+                        <div class="chat-bubble bot">Hello! I'm logged in and ready to help. How can I assist you?</div>
+                    </div>
+                </div>
+                <div id="chat-loading" class="hidden p-4 flex items-center justify-start">
+                    <div class="chat-bubble bot flex items-center space-x-2">
+                        <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style="animation-delay: 0s;"></div>
+                        <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style="animation-delay: 0.2s;"></div>
+                        <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style="animation-delay: 0.4s;"></div>
+                    </div>
+                </div>
+                <div class="p-4 border-t">
+                    <div class="relative">
+                        <div id="emoji-picker-container" class="absolute bottom-full mb-2 hidden">
+                           <emoji-picker class="light"></emoji-picker>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <input type="text" id="chat-input" class="flex-1 p-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type your message...">
+                            <button id="emoji-button" class="flex-shrink-0 p-3 bg-gray-200 hover:bg-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                <i data-lucide="smile" class="w-6 h-6 text-gray-600"></i>
+                            </button>
+                            <button id="mic-button" class="flex-shrink-0 p-3 bg-gray-200 hover:bg-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                <i data-lucide="mic" class="w-6 h-6 text-gray-600"></i>
+                            </button>
+                            <button id="send-button" class="flex-shrink-0 p-3 bg-blue-500 hover:bg-blue-600 text-white rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                <i data-lucide="send" class="w-6 h-6"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+             <div id="vtoa-tab" class="tab-content hidden h-full flex flex-col items-center justify-center text-center p-4">
+                <div class="w-full max-w-md">
+                   <i data-lucide="video" class="mx-auto h-16 w-16 text-blue-500"></i>
+                   <h2 class="mt-4 text-2xl font-bold text-gray-800">Video to Audio Extractor</h2>
+                   <p class="mt-2 text-gray-600">Extract audio from a video file and save it as a WAV file.</p>
+                   <div class="mt-6">
+                       <label for="vtoa-input" class="cursor-pointer inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                           <i data-lucide="upload" class="w-5 h-5 mr-2"></i>
+                           Select Video
+                       </label>
+                       <input id="vtoa-input" type="file" accept="video/*" class="hidden">
+                   </div>
+                   <p id="vtoa-filename" class="mt-4 text-sm text-gray-500"></p>
+                   <button id="vtoa-convert" class="mt-4 w-full bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 disabled:bg-gray-400" disabled>Extract Audio</button>
+                   <div id="vtoa-status" class="mt-4"></div>
+               </div>
+           </div>
+           <div id="ttoa-tab" class="tab-content hidden h-full flex flex-col items-center justify-center text-center p-4">
+               <div class="w-full max-w-md">
+                   <i data-lucide="volume-2" class="mx-auto h-16 w-16 text-green-500"></i>
+                   <h2 class="mt-4 text-2xl font-bold text-gray-800">Text to Speech</h2>
+                   <p class="mt-2 text-gray-600">Convert your text into speech using your browser's voices.</p>
+                   <div class="mt-6 w-full space-y-4">
+                       <textarea id="ttoa-text" class="w-full h-32 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="Enter text here..."></textarea>
+                       <select id="ttoa-voice" class="w-full p-2 border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-green-500"></select>
+                       <button id="ttoa-speak" class="w-full bg-green-500 text-white py-3 rounded-lg hover:bg-green-600">Speak</button>
+                   </div>
+                   <div id="ttoa-status" class="mt-4 text-sm text-gray-500"></div>
+               </div>
+           </div>
+        </main>
+    </div>
+
+    <button id="chat-launcher-button" class="fixed bottom-5 right-5 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg transform transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+        <i data-lucide="message-circle" class="w-8 h-8"></i>
+    </button>
+</body>
+</html>
+
