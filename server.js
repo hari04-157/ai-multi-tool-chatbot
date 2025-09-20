@@ -10,7 +10,7 @@ const mongoose = require('mongoose');
 const MongoStore = require('connect-mongo');
 
 const app = express();
-const port = process.env.PORT || 3000; // Use port from environment or default to 3000
+const port = process.env.PORT || 3000;
 
 // --- Database Connection ---
 mongoose.connect(process.env.MONGO_URI, {})
@@ -29,7 +29,7 @@ const User = mongoose.model('User', UserSchema);
 
 // --- CORS Configuration for Live Site ---
 const allowedOrigins = [
-    'https://ai-multi-tool-chatbot.netlify.app',
+    'http://ai-multi-tool-chatbot.netlify.app',
     'http://localhost:3000'
 ];
 
@@ -47,7 +47,7 @@ app.use(cors({
 app.use(express.json());
 
 // --- Session Configuration ---
-app.set('trust proxy', 1); // Trust first proxy for secure cookies
+app.set('trust proxy', 1);
 app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
@@ -57,9 +57,9 @@ app.use(session({
         collectionName: 'sessions'
     }),
     cookie: {
-        secure: true, // Required for cross-site cookies
-        sameSite: 'none', // Required for cross-site cookies
-        maxAge: 1000 * 60 * 60 * 24 // 1 day
+        secure: true,
+        sameSite: 'none',
+        maxAge: 1000 * 60 * 60 * 24
     }
 }));
 
@@ -108,17 +108,16 @@ passport.deserializeUser(async (id, done) => {
 // --- API and Authentication Routes ---
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
-app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: 'https://ai-multi-tool-chatbot.netlify.app' }), (req, res) => {
-    res.redirect('https://ai-multi-tool-chatbot.netlify.app/chat.html');
+app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: 'http://ai-multi-tool-chatbot.netlify.app' }), (req, res) => {
+    res.redirect('http://ai-multi-tool-chatbot.netlify.app/chat.html');
 });
 
-// The logout route is hit by the browser, so it's a simple API call
 app.get('/auth/logout', (req, res, next) => {
-    const frontendUrl = 'https://ai-multi-tool-chatbot.netlify.app';
+    const frontendUrl = 'http://ai-multi-tool-chatbot.netlify.app';
     req.logout(function(err) {
         if (err) { return next(err); }
         req.session.destroy(() => {
-            res.clearCookie('connect.sid'); 
+            res.clearCookie('connect.sid');
             res.redirect(frontendUrl);
         });
     });
@@ -132,8 +131,103 @@ app.get('/api/user', (req, res) => {
     }
 });
 
-// --- Main Chat Endpoint & Helper Functions remain the same ---
-// ...
+// --- Middleware to Protect Page Routes ---
+function ensureAuthenticated(req, res, next) {
+    if (req.isAuthenticated()) {
+        return next();
+    }
+    res.redirect('http://ai-multi-tool-chatbot.netlify.app');
+}
+
+app.get('/chat.html', ensureAuthenticated, (req, res) => {
+    res.sendFile(path.join(__dirname, 'chat.html'));
+});
+
+// --- Main Chat Endpoint ---
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const STABILITY_API_KEY = process.env.STABILITY_API_KEY;
+
+app.post('/chat', async (req, res) => {
+    if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: 'Session expired. Please log in again.' });
+    }
+
+    const userPrompt = req.body.prompt;
+    if (!userPrompt) return res.status(400).json({ error: 'Prompt is required' });
+
+    const lowerCasePrompt = userPrompt.toLowerCase();
+    const introTriggers = ['introduce yourself', 'who are you', 'what is your name', "what's your name", 'who made you', 'who developed you', 'who created you'];
+    
+    // This is the special check for your custom data
+    if (introTriggers.some(trigger => lowerCasePrompt.includes(trigger))) {
+        const customResponse = "My name is Rocky. I was developed by P.V. Hareesh (Reg. No: 2373A05196), a 3rd-year B.Tech CSE student from the 2024-2027 batch at PBR Visvodaya Institute of Technology & Science, Kavali. This project was completed under the guidance of Madhuri Madam.";
+        return res.json({ type: 'text', data: customResponse });
+    }
+
+    try {
+        const routingPrompt = `Is the user asking to generate an image, picture, or photo? Respond with a JSON object only, either {"type": "image", "prompt": "the subject for the image"} OR {"type": "text", "prompt": "the original question"}. User question: "${userPrompt}"`;
+        
+        const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+        const routingResponse = await fetch(geminiApiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: routingPrompt }] }] }),
+        });
+        if (!routingResponse.ok) throw new Error('Failed to get a response from the routing AI.');
+        
+        const routingData = await routingResponse.json();
+        const geminiResponseText = routingData.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!geminiResponseText) throw new Error("The AI router returned an empty response.");
+        
+        const jsonMatch = geminiResponseText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error("The AI router gave an invalid response format.");
+        
+        const intent = JSON.parse(jsonMatch[0]);
+
+        if (intent.type === 'image') {
+            const imageBase64 = await generateImageWithStability(intent.prompt);
+            res.json({ type: 'image', data: imageBase64 });
+        } else {
+            const textResponse = await generateTextWithGemini(intent.prompt);
+            res.json({ type: 'text', data: textResponse });
+        }
+    } catch (error) {
+        console.error('Server Error in /chat endpoint:', error);
+        res.status(500).json({ error: 'Failed to process the request.' });
+    }
+});
+
+// --- Helper Functions ---
+async function generateTextWithGemini(prompt) {
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+    const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error('Failed to get text response from Gemini API.');
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't get a response.";
+}
+
+async function generateImageWithStability(prompt) {
+    if (!STABILITY_API_KEY) throw new Error('Stability AI API key not configured.');
+    const engineId = 'stable-diffusion-xl-1024-v1-0';
+    const apiHost = 'https://api.stability.ai';
+    const apiUrl = `${apiHost}/v1/generation/${engineId}/text-to-image`;
+    const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${STABILITY_API_KEY}` },
+        body: JSON.stringify({ text_prompts: [{ text: prompt }], cfg_scale: 7, height: 1024, width: 1024, steps: 30, samples: 1 }),
+    });
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Stability AI Error:', errorText);
+        throw new Error('Failed to get image from Stability API.');
+    }
+    const data = await response.json();
+    return data.artifacts[0].base64;
+}
 
 app.listen(port, () => {
     console.log(`Server is listening on port ${port}`);
