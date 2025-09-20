@@ -29,7 +29,7 @@ const User = mongoose.model('User', UserSchema);
 
 // --- CORS Configuration for Live Site ---
 const allowedOrigins = [
-    'http://ai-multi-tool-chatbot.netlify.app',
+    'https://ai-multi-tool-chatbot.netlify.app', // UPDATED to https
     'http://localhost:3000'
 ];
 
@@ -108,12 +108,14 @@ passport.deserializeUser(async (id, done) => {
 // --- API and Authentication Routes ---
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
-app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: 'http://ai-multi-tool-chatbot.netlify.app' }), (req, res) => {
-    res.redirect('http://ai-multi-tool-chatbot.netlify.app/chat.html');
+app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: 'https://ai-multi-tool-chatbot.netlify.app' }), (req, res) => {
+    // UPDATED to https
+    res.redirect('https://ai-multi-tool-chatbot.netlify.app/chat.html');
 });
 
 app.get('/auth/logout', (req, res, next) => {
-    const frontendUrl = 'http://ai-multi-tool-chatbot.netlify.app';
+    // UPDATED to https
+    const frontendUrl = 'https://ai-multi-tool-chatbot.netlify.app';
     req.logout(function(err) {
         if (err) { return next(err); }
         req.session.destroy(() => {
@@ -136,7 +138,8 @@ function ensureAuthenticated(req, res, next) {
     if (req.isAuthenticated()) {
         return next();
     }
-    res.redirect('http://ai-multi-tool-chatbot.netlify.app');
+    // UPDATED to https
+    res.redirect('https://ai-multi-tool-chatbot.netlify.app');
 }
 
 app.get('/chat.html', ensureAuthenticated, (req, res) => {
@@ -158,7 +161,6 @@ app.post('/chat', async (req, res) => {
     const lowerCasePrompt = userPrompt.toLowerCase();
     const introTriggers = ['introduce yourself', 'who are you', 'what is your name', "what's your name", 'who made you', 'who developed you', 'who created you'];
     
-    // This is the special check for your custom data
     if (introTriggers.some(trigger => lowerCasePrompt.includes(trigger))) {
         const customResponse = "My name is Rocky. I was developed by P.V. Hareesh (Reg. No: 2373A05196), a 3rd-year B.Tech CSE student from the 2024-2027 batch at PBR Visvodaya Institute of Technology & Science, Kavali. This project was completed under the guidance of Madhuri Madam.";
         return res.json({ type: 'text', data: customResponse });
@@ -222,7 +224,7 @@ async function generateImageWithStability(prompt) {
     });
     if (!response.ok) {
         const errorText = await response.text();
-        console.error('Stability AI Error:', errorText);
+        console.error('Stability API Error:', errorText);
         throw new Error('Failed to get image from Stability API.');
     }
     const data = await response.json();
