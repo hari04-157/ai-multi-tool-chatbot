@@ -1,8 +1,9 @@
-// script.js
+// **UPDATED: Added API Base URL**
+const API_BASE_URL = 'https://ai-chatbot-api-7muc.onrender.com';
 
 document.addEventListener('DOMContentLoaded', () => {
 
-    // --- 1. "GET STARTED" BUTTON LOGIC (NEW FLOW) ---
+    // --- 1. "GET STARTED" BUTTON LOGIC ---
     const welcomeSection = document.getElementById('welcome-section');
     const loginSection = document.getElementById('login-section');
     const getStartedBtn = document.getElementById('get-started-btn');
@@ -11,7 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
         getStartedBtn.addEventListener('click', async () => {
             try {
                 // Check if the user is already logged in
-                const response = await fetch('/api/user');
+                // **UPDATED: Using full API URL**
+                const response = await fetch(`${API_BASE_URL}/api/user`, { credentials: 'include' });
                 const data = await response.json();
 
                 if (data.loggedIn) {
@@ -20,7 +22,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     // If not logged in, show the login/signup forms
                     welcomeSection.classList.add('hidden');
-                    // We hide the entire main content area to focus on the form
                     document.getElementById('features').classList.add('hidden');
                     loginSection.classList.remove('hidden');
                 }
@@ -33,10 +34,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+    
+    // Also update the Google Login Link in index.html
+    const googleLoginLink = document.querySelector('a[href="/auth/google"]');
+    if (googleLoginLink) {
+        googleLoginLink.href = `${API_BASE_URL}/auth/google`;
+    }
 
     // --- 2. EXISTING FORM LOGIC ---
-    // (This code remains the same as before)
-
     // Form Toggling Logic
     const signinForm = document.getElementById('signin-form');
     const signupForm = document.getElementById('signup-form');
@@ -93,10 +98,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             try {
-                const response = await fetch('/auth/signup', {
+                // **UPDATED: Using full API URL**
+                const response = await fetch(`${API_BASE_URL}/auth/signup`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ firstName, lastName, email, password })
+                    body: JSON.stringify({ firstName, lastName, email, password }),
+                    credentials: 'include'
                 });
                 const data = await response.json();
                 if (!response.ok) {
@@ -117,10 +124,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const email = document.getElementById('signin-email').value;
             const password = document.getElementById('signin-password').value;
             try {
-                const response = await fetch('/auth/login', {
+                // **UPDATED: Using full API URL**
+                const response = await fetch(`${API_BASE_URL}/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
+                    body: JSON.stringify({ email, password }),
+                    credentials: 'include'
                 });
                 const data = await response.json();
                 if (!response.ok) {

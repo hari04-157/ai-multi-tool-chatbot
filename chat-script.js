@@ -1,5 +1,14 @@
+// **UPDATED: Added API Base URL**
+const API_BASE_URL = 'https://ai-chatbot-api-7muc.onrender.com';
+
 document.addEventListener('DOMContentLoaded', () => {
     lucide.createIcons();
+
+    // --- Update Logout Link ---
+    const logoutLink = document.querySelector('a[href="/auth/logout"]');
+    if (logoutLink) {
+        logoutLink.href = `${API_BASE_URL}/auth/logout`;
+    }
 
     // --- Panel Toggle Logic ---
     const chatbotContainer = document.getElementById('chatbot-container');
@@ -200,7 +209,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         try {
-            const response = await fetch('/chat', {
+            // **UPDATED: Using full API URL**
+            const response = await fetch(`${API_BASE_URL}/chat`, {
                 method: 'POST',
                 body: formData, 
                 credentials: 'include'
