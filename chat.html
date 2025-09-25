@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="style.css">
     <script src="chat-script.js" defer></script>
 </head>
-<body class="bg-black">
+<body class="bg-black chat-open">
     <header class="absolute top-0 right-0 p-6 z-10">
          <a href="/auth/logout" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-full">Logout</a>
     </header>
@@ -19,13 +19,13 @@
         <div class="min-h-screen flex items-center justify-center text-white p-8">
             <div class="max-w-3xl text-center">
                 <h1 class="text-5xl font-bold mb-4 animated-gradient-text">Welcome Back!</h1>
-                <p class="text-lg text-gray-400 mb-10">Click the message icon in the bottom right to launch your AI assistant.</p>
+                <p class="text-lg text-gray-400 mb-10">Your AI assistant is open and ready to help.</p>
                  <a href="/" class="text-blue-400 hover:underline">← Go back to Home</a>
             </div>
         </div>
     </main>
 
-    <div id="chatbot-container" class="fixed top-5 left-5 w-full max-w-lg flex flex-col rounded-2xl shadow-2xl bg-white transform transition-all duration-300 ease-in-out scale-0 opacity-0" style="height: 85vh; max-height: 700px; transform-origin: top left;">
+    <div id="chatbot-container" class="fixed top-5 left-5 w-full max-w-lg flex flex-col rounded-2xl shadow-2xl bg-white transform transition-all duration-300 ease-in-out" style="height: 85vh; max-height: 700px; transform-origin: top left;">
         <header class="p-4 border-b bg-gray-50 rounded-t-2xl flex justify-between items-center flex-shrink-0">
             <div class="text-left">
                 <h1 class="text-xl font-bold text-gray-800">AI Multi-Tool Chatbot</h1>
@@ -128,7 +128,7 @@
         </main>
     </div>
 
-    <button id="chat-launcher-button" class="fixed bottom-5 right-5 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg transform transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+    <button id="chat-launcher-button" class="hidden fixed bottom-5 right-5 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg transform transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
         <i data-lucide="message-circle" class="w-8 h-8"></i>
     </button>
 </body>
