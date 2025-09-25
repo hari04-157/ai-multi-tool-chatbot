@@ -53,23 +53,20 @@ UserSchema.methods.comparePassword = function(candidatePassword) {
 const User = mongoose.model('User', UserSchema);
 
 // --- Multer Configuration ---
-// Stores the uploaded file in memory as a Buffer
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 // --- MIDDLEWARE ---
-// **UPDATED CORS CONFIGURATION**
 app.use(cors({
-    origin: 'https://ai-multi-tool-chatbot.netlify.app', // Allow requests from your Netlify frontend
+    origin: 'https://ai-multi-tool-chatbot.netlify.app',
     credentials: true
 }));
 
-// Middleware for parsing JSON and URL-encoded data
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 
-// --- Session Configuration ---
+// --- **UPDATED Session Configuration for Cross-Site Cookies** ---
 app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
@@ -79,9 +76,9 @@ app.use(session({
         collectionName: 'sessions'
     }),
     cookie: {
-        secure: true, // Set to true for HTTPS
+        secure: true,      // Requires HTTPS
         httpOnly: true,
-        sameSite: 'none' // Required for cross-site cookies
+        sameSite: 'none'   // Allows cross-domain cookies
     }
 }));
 
@@ -92,11 +89,10 @@ app.use(passport.session());
 app.use(express.static(path.join(__dirname)));
 
 // --- Passport.js Strategies Configuration ---
-// **UPDATED GOOGLE STRATEGY**
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: "https://ai-chatbot-api-7muc.onrender.com/auth/google/callback" // Use your public Render URL
+    callbackURL: "https://ai-chatbot-api-7muc.onrender.com/auth/google/callback"
 }, async (accessToken, refreshToken, profile, done) => {
     try {
         let user = await User.findOne({ googleId: profile.id });
@@ -194,7 +190,7 @@ app.post('/auth/login', passport.authenticate('local'), (req, res) => {
 
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
-app.get('/auth/google/callback', passport.authenticate('google', { 
+app.get('/auth/google/callback', passport.authenticate('google', {
     successRedirect: 'https://ai-multi-tool-chatbot.netlify.app/chat.html',
     failureRedirect: 'https://ai-multi-tool-chatbot.netlify.app/'
 }));
@@ -223,8 +219,6 @@ function ensureAuthenticated(req, res, next) {
     res.status(401).json({ error: 'User not authenticated' });
 }
 
-// NOTE: We no longer need to serve chat.html from express, Netlify handles it.
-// This route can be removed or kept for API-only protection checks.
 app.get('/chat-access-check', ensureAuthenticated, (req, res) => {
     res.status(200).json({ message: 'Access granted' });
 });
@@ -241,24 +235,24 @@ app.post('/chat', ensureAuthenticated, upload.single('file'), async (req, res) =
     if (!userPrompt && !file) {
         return res.status(400).json({ error: 'Prompt or file is required' });
     }
-    
+
     const lowerCasePrompt = userPrompt.toLowerCase();
     const introTriggers = ['introduce yourself', 'who are you', 'what is your name', "what's your name", 'who made you', 'who developed you', 'who created you'];
     if (introTriggers.some(trigger => lowerCasePrompt.includes(trigger))) {
         const customResponse = "My name is Rocky. I was developed by V. Sowmya(Roll. No:2373A05196),A. Ashok (Roll. No:2373A05201),M .Vineesha(Roll. No:2373A05196),Anusha(Roll. No:2373A05191), P.V. Hareesh (Roll. No:2373A05196),  3rd-year B.Tech CSE students from the 2024-2027 batch at PBR Visvodaya Institute of Technology & Science, Kavali. This project was completed under the guidance of Madhuri Madam.";
         return res.json({ type: 'text', data: customResponse });
     }
-    
+
     try {
         const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
-        
+
         // --- Multimodal Logic (File + Optional Text) ---
         if (file) {
             const fileData = file.buffer.toString('base64');
             const fileMimeType = file.mimetype;
 
             const requestBody = {
-                contents: [{ 
+                contents: [{
                     parts: [
                         { text: userPrompt || "Please provide a detailed explanation of this file." },
                         { inline_data: { mime_type: fileMimeType, data: fileData } }
@@ -271,13 +265,13 @@ app.post('/chat', ensureAuthenticated, upload.single('file'), async (req, res) =
                     { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
                 ]
             };
-            
+
             const geminiResponse = await fetch(geminiApiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody),
             });
-            
+
             if (!geminiResponse.ok) {
                 const errorBody = await geminiResponse.json().catch(() => geminiResponse.text());
                 console.error('Gemini Multimodal API Error:', errorBody);
@@ -298,14 +292,13 @@ app.post('/chat', ensureAuthenticated, upload.single('file'), async (req, res) =
 
         // --- Text-Only Logic (No file attached) ---
         const routingPrompt = `Is the user asking to generate an image? Respond with a JSON object only, either {"type": "image", "prompt": "the subject for the image"} OR {"type": "text", "prompt": "the original question"}. User question: "${userPrompt}"`;
-        
+
         const routingResponse = await fetch(geminiApiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ contents: [{ parts: [{ text: routingPrompt }] }] }),
         });
 
-        // This block includes the improved error logging
         if (!routingResponse.ok) {
             const errorBody = await routingResponse.json().catch(() => routingResponse.text());
             console.error('Gemini Routing API Error:', errorBody);
@@ -314,12 +307,12 @@ app.post('/chat', ensureAuthenticated, upload.single('file'), async (req, res) =
 
         const routingData = await routingResponse.json();
         const geminiResponseText = routingData.candidates?.[0]?.content?.parts?.[0]?.text;
-        
+
         if (!geminiResponseText) throw new Error("The AI router returned an empty response.");
-        
+
         const jsonMatch = geminiResponseText.match(/\{[\s\S]*\}/);
         if (!jsonMatch) throw new Error("The AI router gave an invalid response format.");
-        
+
         const intent = JSON.parse(jsonMatch[0]);
 
         if (intent.type === 'image') {
