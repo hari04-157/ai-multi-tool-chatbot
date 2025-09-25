@@ -17,6 +17,28 @@ body {
     transition: all 0.3s ease-in-out;
 }
 
+/* --- ATTENTION: MODIFIED SPINNER STYLES --- */
+.spinner-rotate {
+    animation: spin 1s linear infinite, pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* New animation for the blinking effect */
+@keyframes pulse {
+  200% {
+    opacity: 2;
+  }
+}
+/* --- END OF MODIFIED STYLES --- */
+
 /* --- Original Chatbot Styles --- */
 body.chat-open #main-content {
     margin-left: 532px; 
@@ -77,35 +99,18 @@ body.chat-open #main-content {
     50% { background-position: 100% 50%; }
     100% { background-position: 0% 50%; }
 }
-
-/* This is for the animated gradient effect on the main title */
-.animated-gradient-text {
-    background-image: linear-gradient(
-        -45deg,
-        #46e5b3,
-        #1da3d8,
-        #2563eb,
-        #f63b3b,
-        #60a5fa,
-        #2563eb,
-        #1d4ed8,
-        #4f46e5
-    );
-    background-size: 200% auto;
-    background-clip: text;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    animation: gradient-flow 8s ease-in-out infinite;
+/* --- Input Disabling Styles --- */
+#chat-input:disabled,
+#send-button:disabled,
+#mic-button:disabled,
+#emoji-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
-@keyframes gradient-flow {
-    0% {
-        background-position: 0% 50%;
-    }
-    50% {
-        background-position: 100% 50%;
-    }
-    100% {
-        background-position: 0% 50%;
-    }
+/* We use a class for the label since it doesn't have a 'disabled' attribute */
+#file-upload-button.disabled-input {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none; /* This prevents click events */
 }

@@ -1,14 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
     lucide.createIcons();
-    
-    // The base URL for your live backend server on Render
-    const API_BASE_URL = 'https://ai-chatbot-api-7muc.onrender.com';
-    
-    // Update the logout button link to point to the live server
-    const logoutButton = document.querySelector('header a');
-    if(logoutButton) {
-        logoutButton.href = `${API_BASE_URL}/auth/logout`;
-    }
 
     // --- Panel Toggle Logic ---
     const chatbotContainer = document.getElementById('chatbot-container');
@@ -35,17 +26,12 @@ document.addEventListener('DOMContentLoaded', () => {
             tab.classList.add('active');
             const target = tab.getAttribute('data-tab');
             contents.forEach(content => {
-                const contentTabId = content.id.replace('-tab', '');
-                if (contentTabId === target) {
-                    content.classList.remove('hidden');
-                } else {
-                    content.classList.add('hidden');
-                }
+                content.id === `${target}-tab` ? content.classList.remove('hidden') : content.classList.add('hidden');
             });
         });
     });
 
-    // --- Chatbot and Emoji Logic ---
+    // --- Chatbot, Emoji, and File Upload Logic ---
     const chatWindow = document.getElementById('chat-window');
     const chatInput = document.getElementById('chat-input');
     const sendButton = document.getElementById('send-button');
@@ -54,6 +40,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const emojiButton = document.getElementById('emoji-button');
     const emojiPickerContainer = document.getElementById('emoji-picker-container');
     const emojiPicker = document.querySelector('emoji-picker');
+    const fileUploadButton = document.getElementById('file-upload-button'); // This is the label
+    const fileUploadInput = document.getElementById('file-upload');
+    
+    const attachmentPreview = document.getElementById('attachment-preview');
+    const attachmentFilename = document.getElementById('attachment-filename');
+    const removeAttachmentButton = document.getElementById('remove-attachment-button');
+    
+    let attachedFile = null;
+
+    // --- Helper functions to disable/enable inputs ---
+    const disableChatInputs = () => {
+        chatInput.disabled = true;
+        sendButton.disabled = true;
+        micButton.disabled = true;
+        emojiButton.disabled = true;
+        fileUploadButton.classList.add('disabled-input'); // Use class for the label
+    };
+
+    const enableChatInputs = () => {
+        chatInput.disabled = false;
+        sendButton.disabled = false;
+        micButton.disabled = false;
+        emojiButton.disabled = false;
+        fileUploadButton.classList.remove('disabled-input');
+    };
 
     if (emojiButton) {
         emojiButton.addEventListener('click', (event) => {
@@ -74,11 +85,67 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // --- THIS FUNCTION IS CORRECTED ---
+    const clearAttachment = () => {
+        attachedFile = null;
+        fileUploadInput.value = '';
+        if (attachmentPreview) attachmentPreview.classList.add('hidden');
+        if (fileUploadButton) {
+            // Select either the original <i> tag or the <svg> it was replaced with
+            const icon = fileUploadButton.querySelector('i, svg');
+            // Only try to remove the class if an icon was actually found
+            if (icon) {
+                icon.classList.remove('text-blue-500');
+            }
+        }
+        // No need to call lucide.createIcons() here again
+    };
+
+    // --- THIS EVENT LISTENER IS CORRECTED ---
+    if (fileUploadInput) {
+        fileUploadInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) {
+                clearAttachment();
+                return;
+            }
+            attachedFile = file;
+            attachmentPreview.classList.remove('hidden');
+            attachmentFilename.textContent = file.name;
+
+            // This part is for visual feedback, not strictly necessary for the fix
+            const attachmentFileIcon = document.getElementById('attachment-file-icon');
+            const attachmentLoadingSpinner = document.getElementById('attachment-loading-spinner');
+            if (attachmentFileIcon) attachmentFileIcon.classList.add('hidden');
+            if (attachmentLoadingSpinner) attachmentLoadingSpinner.classList.remove('hidden');
+
+            setTimeout(() => {
+                if (attachmentFileIcon) attachmentFileIcon.classList.remove('hidden');
+                if (attachmentLoadingSpinner) attachmentLoadingSpinner.classList.add('hidden');
+                
+                if (fileUploadButton) {
+                    // Select either the original <i> tag or the <svg> it was replaced with
+                    const icon = fileUploadButton.querySelector('i, svg');
+                    // Only try to add the class if an icon was actually found
+                    if (icon) {
+                        icon.classList.add('text-blue-500');
+                    }
+                }
+                lucide.createIcons(); // It's okay to call it here to render any new icons
+            }, 1500);
+        });
+    }
+
+    if (removeAttachmentButton) {
+        removeAttachmentButton.addEventListener('click', clearAttachment);
+    }
+    
     const addMessage = (message, sender) => {
         if (!chatWindow) return;
         const messageDiv = document.createElement('div');
         messageDiv.className = `flex ${sender === 'user' ? 'justify-end' : 'justify-start'}`;
-        messageDiv.innerHTML = `<div class="chat-bubble ${sender}">${message.replace(/\n/g, '<br>')}</div>`;
+        const messageText = message || "Sorry, an unexpected error occurred.";
+        messageDiv.innerHTML = `<div class="chat-bubble ${sender}">${messageText.replace(/\n/g, '<br>')}</div>`;
         chatWindow.appendChild(messageDiv);
         chatWindow.scrollTop = chatWindow.scrollHeight;
     };
@@ -116,39 +183,55 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const handleChat = async () => {
         const userInput = chatInput.value.trim();
-        if (!userInput) return;
-        addMessage(userInput, 'user');
+        if (!userInput && !attachedFile) return;
+
+        disableChatInputs();
+
+        if (userInput) {
+            addMessage(userInput, 'user');
+        }
         chatInput.value = '';
         chatLoading.classList.remove('hidden');
 
+        const formData = new FormData();
+        formData.append('prompt', userInput);
+        if (attachedFile) {
+            formData.append('file', attachedFile, attachedFile.name);
+        }
+        
         try {
-            const response = await fetch(`${API_BASE_URL}/chat`, {
+            const response = await fetch('/chat', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: userInput }),
+                body: formData, 
                 credentials: 'include'
             });
 
             if (response.status === 401) {
                  addMessage('Your session has expired. Redirecting to login...', 'bot');
                  setTimeout(() => { window.location.href = '/'; }, 2000);
+                 // The finally block will still run before this returns
                  return;
             }
             if (!response.ok) {
                  const errData = await response.json().catch(() => ({ error: 'The server returned an unreadable error.' }));
-                 throw new Error(errData.error || 'The server responded with an error.');
+                 throw new Error(errData.error || `Server responded with status: ${response.status}`);
             }
             
             const data = await response.json();
-            if (data.type === 'image') {
+
+            if (data.error) {
+                addMessage(`Error: ${data.error}`, 'bot');
+            } else if (data.type === 'image') {
                 addImage(data.data);
             } else {
                 addMessage(data.data, 'bot');
             }
         } catch (error) {
-            addMessage(`Error: ${error.message}. Please check server logs.`, 'bot');
+            addMessage(`Error: ${error.message}.`, 'bot');
         } finally {
             if(chatLoading) chatLoading.classList.add('hidden');
+            clearAttachment();
+            enableChatInputs();
         }
     };
 
@@ -169,7 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // --- Video to Audio Logic ---
+    // --- Other utility functions (Video to Audio, Text to Audio) ---
     const vtoaInput = document.getElementById('vtoa-input');
     const vtoaConvertBtn = document.getElementById('vtoa-convert');
     const vtoaFilename = document.getElementById('vtoa-filename');
@@ -202,7 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     const downloadLink = document.createElement('a');
                     downloadLink.href = url;
-                    downloadLink.download = `${vtoaFile.name.split('.').slice(0, -1).join('.') || vtoaFile.name}.wav`;
+                    downloadLink.download = `${vtoaFile.name.split('.')[0]}.wav`;
                     downloadLink.className = 'mt-4 block text-center text-blue-600 hover:underline';
                     downloadLink.innerText = 'Click here to download your audio file';
                     
@@ -221,7 +304,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // --- Text to Audio Logic ---
     const ttoaText = document.getElementById('ttoa-text');
     const ttoaVoice = document.getElementById('ttoa-voice');
     const ttoaSpeakBtn = document.getElementById('ttoa-speak');
