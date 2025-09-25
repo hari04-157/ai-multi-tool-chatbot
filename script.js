@@ -12,7 +12,6 @@ document.addEventListener('DOMContentLoaded', () => {
         getStartedBtn.addEventListener('click', async () => {
             try {
                 // Check if the user is already logged in
-                // **UPDATED: Using full API URL**
                 const response = await fetch(`${API_BASE_URL}/api/user`, { credentials: 'include' });
                 const data = await response.json();
 
@@ -98,7 +97,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             try {
-                // **UPDATED: Using full API URL**
                 const response = await fetch(`${API_BASE_URL}/auth/signup`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -116,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- Signin Form Handler ---
+    // --- Signin Form Handler (with improved error handling) ---
     if (signinForm) {
         signinForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -124,18 +122,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const email = document.getElementById('signin-email').value;
             const password = document.getElementById('signin-password').value;
             try {
-                // **UPDATED: Using full API URL**
                 const response = await fetch(`${API_BASE_URL}/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, password }),
                     credentials: 'include'
                 });
-                const data = await response.json();
+
+                // First, check if the request was successful
                 if (!response.ok) {
-                    throw new Error(data.message || 'Login failed.');
+                    // Try to get a more specific error message from the backend
+                    const errorData = await response.json().catch(() => ({ message: 'Invalid email or password.' }));
+                    throw new Error(errorData.message);
                 }
+                
+                // Only parse as JSON if the response was ok
+                const data = await response.json();
                 window.location.href = '/chat.html';
+
             } catch (error) {
                 showError(error.message);
             }
