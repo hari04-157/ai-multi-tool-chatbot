@@ -66,7 +66,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 
-// --- **UPDATED Session Configuration for Cross-Site Cookies** ---
+// --- Session Configuration for Cross-Site Cookies ---
 app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
