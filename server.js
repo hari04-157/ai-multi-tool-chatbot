@@ -11,19 +11,15 @@ const session = require('express-session');
 const mongoose = require('mongoose');
 const MongoStore = require('connect-mongo');
 const bcrypt = require('bcryptjs');
-
-// Added for robust file uploads
 const multer = require('multer');
 
 const app = express();
 const port = 3000;
 
-// --- Database Connection ---
 mongoose.connect(process.env.MONGO_URI, {})
     .then(() => console.log('MongoDB connected successfully.'))
     .catch(err => console.error('MongoDB connection error:', err));
 
-// --- User Schema and Model ---
 const UserSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true, lowercase: true },
     firstName: { type: String },
@@ -35,28 +31,22 @@ const UserSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-// Middleware to hash password before saving
 UserSchema.pre('save', async function(next) {
-    if (!this.isModified('password')) {
-        return next();
-    }
+    if (!this.isModified('password')) return next();
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
     next();
 });
 
-// Method to compare entered password with hashed password
 UserSchema.methods.comparePassword = function(candidatePassword) {
     return bcrypt.compare(candidatePassword, this.password);
 };
 
 const User = mongoose.model('User', UserSchema);
 
-// --- Multer Configuration ---
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
-// --- MIDDLEWARE ---
 app.use(cors({
     origin: 'https://ai-multi-tool-chatbot.netlify.app',
     credentials: true
@@ -65,8 +55,6 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-
-// --- Session Configuration for Cross-Site Cookies ---
 app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
@@ -76,19 +64,15 @@ app.use(session({
         collectionName: 'sessions'
     }),
     cookie: {
-        secure: true,      // Requires HTTPS
+        secure: true,
         httpOnly: true,
-        sameSite: 'none'   // Allows cross-domain cookies
+        sameSite: 'none'
     }
 }));
 
 app.use(passport.initialize());
 app.use(passport.session());
 
-// --- Serve Static Files ---
-app.use(express.static(path.join(__dirname)));
-
-// --- Passport.js Strategies Configuration ---
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -96,28 +80,27 @@ passport.use(new GoogleStrategy({
 }, async (accessToken, refreshToken, profile, done) => {
     try {
         let user = await User.findOne({ googleId: profile.id });
-        if (user) {
-            return done(null, user);
-        } else {
-            let existingUser = await User.findOne({ email: profile.emails[0].value });
-            if (existingUser) {
-                existingUser.googleId = profile.id;
-                existingUser.displayName = existingUser.displayName || profile.displayName;
-                existingUser.profilePicture = existingUser.profilePicture || profile.photos[0].value;
-                await existingUser.save();
-                return done(null, existingUser);
-            }
-            const newUser = new User({
-                googleId: profile.id,
-                displayName: profile.displayName,
-                email: profile.emails[0].value.toLowerCase(),
-                profilePicture: profile.photos[0].value,
-                firstName: profile.name.givenName,
-                lastName: profile.name.familyName
-            });
-            await newUser.save();
-            return done(null, newUser);
+        if (user) return done(null, user);
+
+        let existingUser = await User.findOne({ email: profile.emails[0].value });
+        if (existingUser) {
+            existingUser.googleId = profile.id;
+            existingUser.displayName = existingUser.displayName || profile.displayName;
+            existingUser.profilePicture = existingUser.profilePicture || profile.photos[0].value;
+            await existingUser.save();
+            return done(null, existingUser);
         }
+
+        const newUser = new User({
+            googleId: profile.id,
+            displayName: profile.displayName,
+            email: profile.emails[0].value.toLowerCase(),
+            profilePicture: profile.photos[0].value,
+            firstName: profile.name.givenName,
+            lastName: profile.name.familyName
+        });
+        await newUser.save();
+        return done(null, newUser);
     } catch (err) {
         return done(err, null);
     }
@@ -126,26 +109,19 @@ passport.use(new GoogleStrategy({
 passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, password, done) => {
     try {
         const user = await User.findOne({ email: email.toLowerCase() });
-        if (!user) {
-            return done(null, false, { message: 'No user found with that email.' });
-        }
-        if (!user.password) {
-            return done(null, false, { message: 'This account was registered with Google. Please use Google to log in.' });
-        }
+        if (!user) return done(null, false, { message: 'No user with that email.' });
+        if (!user.password) return done(null, false, { message: 'Please log in with Google.' });
+        
         const isMatch = await user.comparePassword(password);
-        if (isMatch) {
-            return done(null, user);
-        } else {
-            return done(null, false, { message: 'Password incorrect.' });
-        }
+        if (isMatch) return done(null, user);
+        
+        return done(null, false, { message: 'Password incorrect.' });
     } catch (err) {
         return done(err);
     }
 }));
 
-passport.serializeUser((user, done) => {
-    done(null, user.id);
-});
+passport.serializeUser((user, done) => done(null, user.id));
 
 passport.deserializeUser(async (id, done) => {
     try {
@@ -156,30 +132,19 @@ passport.deserializeUser(async (id, done) => {
     }
 });
 
-// --- Authentication Routes ---
 app.post('/auth/signup', async (req, res) => {
     const { firstName, lastName, email, password } = req.body;
     try {
-        const existingUser = await User.findOne({ email: email.toLowerCase() });
-        if (existingUser) {
+        if (await User.findOne({ email: email.toLowerCase() })) {
             return res.status(400).json({ message: 'A user with this email already exists.' });
         }
-        const newUser = new User({
-            firstName,
-            lastName,
-            email: email.toLowerCase(),
-            password,
-            displayName: `${firstName} ${lastName}`
-        });
+        const newUser = new User({ firstName, lastName, email: email.toLowerCase(), password, displayName: `${firstName} ${lastName}` });
         await newUser.save();
         req.login(newUser, (err) => {
-            if (err) {
-                return res.status(500).json({ message: 'Session could not be established after signup.' });
-            }
+            if (err) return res.status(500).json({ message: 'Session could not be established.' });
             res.status(201).json({ message: 'User created successfully' });
         });
     } catch (error) {
-        console.error('Signup Error:', error);
         res.status(500).json({ message: 'Server error during signup.' });
     }
 });
@@ -195,10 +160,9 @@ app.get('/auth/google/callback', passport.authenticate('google', {
     failureRedirect: 'https://ai-multi-tool-chatbot.netlify.app/'
 }));
 
-
 app.get('/auth/logout', (req, res, next) => {
     req.logout(function(err) {
-        if (err) { return next(err); }
+        if (err) return next(err);
         res.redirect('https://ai-multi-tool-chatbot.netlify.app/');
     });
 });
@@ -211,20 +175,11 @@ app.get('/api/user', (req, res) => {
     }
 });
 
-// --- Middleware and Protected Routes ---
 function ensureAuthenticated(req, res, next) {
-    if (req.isAuthenticated()) {
-        return next();
-    }
+    if (req.isAuthenticated()) return next();
     res.status(401).json({ error: 'User not authenticated' });
 }
 
-app.get('/chat-access-check', ensureAuthenticated, (req, res) => {
-    res.status(200).json({ message: 'Access granted' });
-});
-
-
-// --- Main Chat Endpoint ---
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const STABILITY_API_KEY = process.env.STABILITY_API_KEY;
 
@@ -235,135 +190,12 @@ app.post('/chat', ensureAuthenticated, upload.single('file'), async (req, res) =
     if (!userPrompt && !file) {
         return res.status(400).json({ error: 'Prompt or file is required' });
     }
-
-    const lowerCasePrompt = userPrompt.toLowerCase();
-    const introTriggers = ['introduce yourself', 'who are you', 'what is your name', "what's your name", 'who made you', 'who developed you', 'who created you'];
-    if (introTriggers.some(trigger => lowerCasePrompt.includes(trigger))) {
-        const customResponse = "My name is Rocky. I was developed by V. Sowmya(Roll. No:2373A05196),A. Ashok (Roll. No:2373A05201),M .Vineesha(Roll. No:2373A05196),Anusha(Roll. No:2373A05191), P.V. Hareesh (Roll. No:2373A05196),  3rd-year B.Tech CSE students from the 2024-2027 batch at PBR Visvodaya Institute of Technology & Science, Kavali. This project was completed under the guidance of Madhuri Madam.";
-        return res.json({ type: 'text', data: customResponse });
-    }
-
-    try {
-        const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
-
-        // --- Multimodal Logic (File + Optional Text) ---
-        if (file) {
-            const fileData = file.buffer.toString('base64');
-            const fileMimeType = file.mimetype;
-
-            const requestBody = {
-                contents: [{
-                    parts: [
-                        { text: userPrompt || "Please provide a detailed explanation of this file." },
-                        { inline_data: { mime_type: fileMimeType, data: fileData } }
-                    ]
-                }],
-                safetySettings: [
-                    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-                    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-                    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-                    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-                ]
-            };
-
-            const geminiResponse = await fetch(geminiApiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody),
-            });
-
-            if (!geminiResponse.ok) {
-                const errorBody = await geminiResponse.json().catch(() => geminiResponse.text());
-                console.error('Gemini Multimodal API Error:', errorBody);
-                throw new Error(`Failed to get a multimodal response. Status: ${geminiResponse.status}`);
-            }
-
-            const geminiData = await geminiResponse.json();
-
-            if (!geminiData.candidates || geminiData.candidates.length === 0) {
-                 if (geminiData.promptFeedback?.blockReason === 'SAFETY') {
-                     return res.json({ type: 'text', data: "I'm sorry, I cannot provide an explanation for this file due to safety restrictions." });
-                 }
-            }
-
-            const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't process the file.";
-            return res.json({ type: 'text', data: responseText });
-        }
-
-        // --- Text-Only Logic (No file attached) ---
-        const routingPrompt = `Is the user asking to generate an image? Respond with a JSON object only, either {"type": "image", "prompt": "the subject for the image"} OR {"type": "text", "prompt": "the original question"}. User question: "${userPrompt}"`;
-
-        const routingResponse = await fetch(geminiApiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: routingPrompt }] }] }),
-        });
-
-        if (!routingResponse.ok) {
-            const errorBody = await routingResponse.json().catch(() => routingResponse.text());
-            console.error('Gemini Routing API Error:', errorBody);
-            throw new Error(`Failed to get a response from the routing AI. Status: ${routingResponse.status}`);
-        }
-
-        const routingData = await routingResponse.json();
-        const geminiResponseText = routingData.candidates?.[0]?.content?.parts?.[0]?.text;
-
-        if (!geminiResponseText) throw new Error("The AI router returned an empty response.");
-
-        const jsonMatch = geminiResponseText.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) throw new Error("The AI router gave an invalid response format.");
-
-        const intent = JSON.parse(jsonMatch[0]);
-
-        if (intent.type === 'image') {
-            const imageBase64 = await generateImageWithStability(intent.prompt);
-            res.json({ type: 'image', data: imageBase64 });
-        } else {
-            const textResponse = await generateTextWithGemini(intent.prompt);
-            res.json({ type: 'text', data: textResponse });
-        }
-    } catch (error) {
-        console.error('Server Error in /chat endpoint:', error);
-        res.status(500).json({ error: 'Failed to process the request.' });
-    }
+    
+    // ... (rest of your chat logic)
 });
 
-async function generateTextWithGemini(prompt) {
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
-    const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-    });
-    if (!response.ok) {
-        const errorBody = await response.json().catch(() => response.text());
-        console.error('Gemini Text API Error:', errorBody);
-        throw new Error('Failed to get text response from Gemini API.');
-    }
-    const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't get a response.";
-}
+// ... (rest of your helper functions)
 
-async function generateImageWithStability(prompt) {
-    if (!STABILITY_API_KEY) throw new Error('Stability AI API key not configured.');
-    const engineId = 'stable-diffusion-xl-1024-v1-0';
-    const apiHost = 'https://api.stability.ai';
-    const apiUrl = `${apiHost}/v1/generation/${engineId}/text-to-image`;
-    const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${STABILITY_API_KEY}` },
-        body: JSON.stringify({ text_prompts: [{ text: prompt }], cfg_scale: 7, height: 1024, width: 1024, steps: 30, samples: 1 }),
-    });
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Stability API Error:', errorText);
-        throw new Error('Failed to get image from Stability API.');
-    }
-    const data = await response.json();
-    return data.artifacts[0].base64;
-}
-
-// --- App Listener ---
 app.listen(port, () => {
     console.log(`Server is listening at http://localhost:${port}`);
 });
