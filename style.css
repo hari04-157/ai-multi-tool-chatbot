@@ -55,31 +55,49 @@ body.chat-open #main-content {
     word-wrap: break-word;
 }
 
+/* MODIFIED: New attractive chat bubble styles */
 .chat-bubble.user {
-    background-color: #3b82f6;
+    background-image: linear-gradient(to right, #3b82f6, #2563eb);
     color: white;
     border-bottom-right-radius: 4px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .chat-bubble.bot {
-    background-color: #e5e7eb;
+    background-color: white;
     color: #1f2937;
+    border: 1px solid #e5e7eb;
     border-bottom-left-radius: 4px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .chat-bubble.image-bubble {
     padding: 6px;
-    background-color: #e5e7eb;
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
 }
 
+/* START: REPLACED TAB STYLES FOR NEW CARD DESIGN */
 .tab-button {
+    color: #4b5563; /* Gray text for inactive tabs */
+    background-color: #f3f4f6; /* Light gray background */
+    border: 1px solid transparent;
     transition: all 0.3s ease;
 }
 
-.tab-button.active {
-    color: #3b82f6;
-    border-bottom-color: #3b82f6;
+.tab-button:hover {
+    background-color: #e5e7eb; /* Slightly darker gray on hover */
+    color: #1f2937;
 }
+
+.tab-button.active {
+    background-image: linear-gradient(to right, #3b82f6, #60a5fa); /* Vibrant blue gradient */
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 4px 14px 0 rgba(0, 118, 255, 0.39);
+    transform: scale(1.05);
+}
+/* END: REPLACED TAB STYLES */
 
 .mic-listening i {
     color: #ef4444; /* Red color when mic is active */

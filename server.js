@@ -14,12 +14,14 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000; // Important for Render
 
+// --- Database Connection ---
 mongoose.connect(process.env.MONGO_URI, {})
     .then(() => console.log('MongoDB connected successfully.'))
     .catch(err => console.error('MongoDB connection error:', err));
 
+// --- User Schema and Model ---
 const UserSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true, lowercase: true },
     firstName: { type: String },
@@ -48,7 +50,7 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 app.use(cors({
-    origin: 'https://ai-multi-tool-chatbot.netlify.app',
+    origin: process.env.RENDER_EXTERNAL_URL, // Auto-detected by Render
     credentials: true
 }));
 
@@ -59,48 +61,48 @@ app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    store: MongoStore.create({
-        mongoUrl: process.env.MONGO_URI,
-        collectionName: 'sessions'
-    }),
+    store: MongoStore.create({ mongoUrl: process.env.MONGO_URI, collectionName: 'sessions' }),
     cookie: {
-        secure: true,
+        secure: 'auto', // Important for HTTPS on Render
         httpOnly: true,
-        sameSite: 'none'
+        maxAge: 1000 * 60 * 60 * 24 * 7 
     }
 }));
 
 app.use(passport.initialize());
 app.use(passport.session());
 
+app.use(express.static(path.join(__dirname)));
+
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: "https://ai-chatbot-api-7muc.onrender.com/auth/google/callback"
+    callbackURL: `${process.env.BASE_URL}/auth/google/callback` // You set BASE_URL in Render
 }, async (accessToken, refreshToken, profile, done) => {
     try {
         let user = await User.findOne({ googleId: profile.id });
-        if (user) return done(null, user);
-
-        let existingUser = await User.findOne({ email: profile.emails[0].value });
-        if (existingUser) {
-            existingUser.googleId = profile.id;
-            existingUser.displayName = existingUser.displayName || profile.displayName;
-            existingUser.profilePicture = existingUser.profilePicture || profile.photos[0].value;
-            await existingUser.save();
-            return done(null, existingUser);
+        if (user) {
+            return done(null, user);
+        } else {
+            let existingUser = await User.findOne({ email: profile.emails[0].value });
+            if (existingUser) {
+                existingUser.googleId = profile.id;
+                existingUser.displayName = existingUser.displayName || profile.displayName;
+                existingUser.profilePicture = existingUser.profilePicture || profile.photos[0].value;
+                await existingUser.save();
+                return done(null, existingUser);
+            }
+            const newUser = new User({
+                googleId: profile.id,
+                displayName: profile.displayName,
+                email: profile.emails[0].value.toLowerCase(),
+                profilePicture: profile.photos[0].value,
+                firstName: profile.name.givenName,
+                lastName: profile.name.familyName
+            });
+            await newUser.save();
+            return done(null, newUser);
         }
-
-        const newUser = new User({
-            googleId: profile.id,
-            displayName: profile.displayName,
-            email: profile.emails[0].value.toLowerCase(),
-            profilePicture: profile.photos[0].value,
-            firstName: profile.name.givenName,
-            lastName: profile.name.familyName
-        });
-        await newUser.save();
-        return done(null, newUser);
     } catch (err) {
         return done(err, null);
     }
@@ -109,19 +111,26 @@ passport.use(new GoogleStrategy({
 passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, password, done) => {
     try {
         const user = await User.findOne({ email: email.toLowerCase() });
-        if (!user) return done(null, false, { message: 'No user with that email.' });
-        if (!user.password) return done(null, false, { message: 'Please log in with Google.' });
-        
+        if (!user) {
+            return done(null, false, { message: 'No user found with that email.' });
+        }
+        if (!user.password) {
+            return done(null, false, { message: 'This account was registered with Google. Please use Google to log in.' });
+        }
         const isMatch = await user.comparePassword(password);
-        if (isMatch) return done(null, user);
-        
-        return done(null, false, { message: 'Password incorrect.' });
+        if (isMatch) {
+            return done(null, user);
+        } else {
+            return done(null, false, { message: 'Password incorrect.' });
+        }
     } catch (err) {
         return done(err);
     }
 }));
 
-passport.serializeUser((user, done) => done(null, user.id));
+passport.serializeUser((user, done) => {
+    done(null, user.id);
+});
 
 passport.deserializeUser(async (id, done) => {
     try {
@@ -135,16 +144,26 @@ passport.deserializeUser(async (id, done) => {
 app.post('/auth/signup', async (req, res) => {
     const { firstName, lastName, email, password } = req.body;
     try {
-        if (await User.findOne({ email: email.toLowerCase() })) {
+        const existingUser = await User.findOne({ email: email.toLowerCase() });
+        if (existingUser) {
             return res.status(400).json({ message: 'A user with this email already exists.' });
         }
-        const newUser = new User({ firstName, lastName, email: email.toLowerCase(), password, displayName: `${firstName} ${lastName}` });
+        const newUser = new User({
+            firstName,
+            lastName,
+            email: email.toLowerCase(),
+            password,
+            displayName: `${firstName} ${lastName}`
+        });
         await newUser.save();
         req.login(newUser, (err) => {
-            if (err) return res.status(500).json({ message: 'Session could not be established.' });
+            if (err) {
+                return res.status(500).json({ message: 'Session could not be established after signup.' });
+            }
             res.status(201).json({ message: 'User created successfully' });
         });
     } catch (error) {
+        console.error('Signup Error:', error);
         res.status(500).json({ message: 'Server error during signup.' });
     }
 });
@@ -155,15 +174,14 @@ app.post('/auth/login', passport.authenticate('local'), (req, res) => {
 
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
-app.get('/auth/google/callback', passport.authenticate('google', {
-    successRedirect: 'https://ai-multi-tool-chatbot.netlify.app/chat.html',
-    failureRedirect: 'https://ai-multi-tool-chatbot.netlify.app/'
-}));
+app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/' }), (req, res) => {
+    res.redirect('/chat.html');
+});
 
 app.get('/auth/logout', (req, res, next) => {
     req.logout(function(err) {
-        if (err) return next(err);
-        res.redirect('https://ai-multi-tool-chatbot.netlify.app/');
+        if (err) { return next(err); }
+        res.redirect('/');
     });
 });
 
@@ -176,14 +194,25 @@ app.get('/api/user', (req, res) => {
 });
 
 function ensureAuthenticated(req, res, next) {
-    if (req.isAuthenticated()) return next();
-    res.status(401).json({ error: 'User not authenticated' });
+    if (req.isAuthenticated()) {
+        return next();
+    }
+    res.redirect('/');
 }
 
+app.get('/chat.html', ensureAuthenticated, (req, res) => {
+    res.sendFile(path.join(__dirname, 'chat.html'));
+});
+
+// --- Main Chat Endpoint ---
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const STABILITY_API_KEY = process.env.STABILITY_API_KEY;
 
-app.post('/chat', ensureAuthenticated, upload.single('file'), async (req, res) => {
+app.post('/chat', upload.single('file'), async (req, res) => {
+    if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: 'Session expired. Please log in again.' });
+    }
+
     const userPrompt = req.body.prompt || "";
     const file = req.file;
 
@@ -191,10 +220,120 @@ app.post('/chat', ensureAuthenticated, upload.single('file'), async (req, res) =
         return res.status(400).json({ error: 'Prompt or file is required' });
     }
     
-    // ... (rest of your chat logic)
+    const lowerCasePrompt = userPrompt.toLowerCase();
+    const introTriggers = ['introduce yourself', 'who are you', 'what is your name', "what's your name", 'who made you', 'who developed you', 'who created you'];
+    if (introTriggers.some(trigger => lowerCasePrompt.includes(trigger))) {
+        const customResponse = "My name is Rocky. I was developed by V. Sowmya(Roll. No:2373A05196),A. Ashok (Roll. No:2373A05201),M .Vineesha(Roll. No:2373A05196),Anusha(Roll. No:2373A05191), P.V. Hareesh (Roll. No:2373A05196),  3rd-year B.Tech CSE students from the 2024-2027 batch at PBR Visvodaya Institute of Technology & Science, Kavali. This project was completed under the guidance of Madhuri Madam.";
+        return res.json({ type: 'text', data: customResponse });
+    }
+    
+    try {
+        const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent?key=${GEMINI_API_KEY}`; // NOTE: gemini-pro-vision for multimodal
+        
+        if (file) {
+            const fileData = file.buffer.toString('base64');
+            const fileMimeType = file.mimetype;
+
+            const requestBody = {
+                contents: [{ 
+                    parts: [
+                        { text: userPrompt || "Please provide a detailed explanation of this file." },
+                        { inline_data: { mime_type: fileMimeType, data: fileData } }
+                    ]
+                }],
+                safetySettings: [
+                    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+                ]
+            };
+            
+            const geminiResponse = await fetch(geminiApiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody),
+            });
+            
+            if (!geminiResponse.ok) throw new Error(`Failed to get a multimodal response. Status: ${geminiResponse.status}`);
+            
+            const geminiData = await geminiResponse.json();
+            const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't process the file.";
+            return res.json({ type: 'text', data: responseText });
+        }
+
+        const routingPrompt = `Is the user asking to generate an image? Respond with a JSON object only, either {"type": "image", "prompt": "the subject for the image"} OR {"type": "text", "prompt": "the original question"}. User question: "${userPrompt}"`;
+        const geminiTextApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
+        
+        const routingResponse = await fetch(geminiTextApiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: routingPrompt }] }] }),
+        });
+
+        if (!routingResponse.ok) throw new Error(`Failed to get a response from the routing AI. Status: ${routingResponse.status}`);
+        
+        const routingData = await routingResponse.json();
+        const geminiResponseText = routingData.candidates?.[0]?.content?.parts?.[0]?.text;
+        const jsonMatch = geminiResponseText.match(/\{[\s\S]*\}/);
+        const intent = JSON.parse(jsonMatch[0]);
+
+        if (intent.type === 'image') {
+            const imageBase64 = await generateImageWithStability(intent.prompt);
+            res.json({ type: 'image', data: imageBase64 });
+        } else {
+            const textResponse = await generateTextWithGemini(intent.prompt);
+            res.json({ type: 'text', data: textResponse });
+        }
+    } catch (error) {
+        console.error('Server Error in /chat endpoint:', error);
+        res.status(500).json({ error: 'Failed to process the request.' });
+    }
 });
 
-// ... (rest of your helper functions)
+async function generateTextWithGemini(prompt) {
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
+    const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    });
+    if (!response.ok) throw new Error('Failed to get text response from Gemini API.');
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't get a response.";
+}
+
+async function generateImageWithStability(prompt) {
+    const engineId = 'stable-diffusion-xl-1024-v1-0';
+    const apiHost = 'https://api.stability.ai';
+    const apiUrl = `${apiHost}/v1/generation/${engineId}/text-to-image`;
+    const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${STABILITY_API_KEY}` },
+        body: JSON.stringify({ text_prompts: [{ text: prompt }], cfg_scale: 7, height: 1024, width: 1024, steps: 30, samples: 1 }),
+    });
+    if (!response.ok) throw new Error('Failed to get image from Stability API.');
+    const data = await response.json();
+    return data.artifacts[0].base64;
+}
+
+app.post('/translate', async (req, res) => {
+    if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: 'Session expired. Please log in again.' });
+    }
+    const { text, targetLanguage } = req.body;
+    if (!text || !targetLanguage) {
+        return res.status(400).json({ error: 'Text and target language are required.' });
+    }
+    try {
+        const translationPrompt = `Translate the following text to ${targetLanguage}. Provide only the translated text as the response:\n\n"${text}"`;
+        const translatedText = await generateTextWithGemini(translationPrompt);
+        res.json({ translatedText });
+    } catch (error) {
+        console.error('Translation Error:', error);
+        res.status(500).json({ error: 'Failed to translate the text.' });
+    }
+});
 
 app.listen(port, () => {
     console.log(`Server is listening at http://localhost:${port}`);
